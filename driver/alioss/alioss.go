@@ -121,6 +121,45 @@ func (driver *ossFs) RemoveDir(ctx context.Context, path string, opts ...fs.Opti
 	return nil
 }
 
+func (driver *ossFs) CopyDir(ctx context.Context, src, dst string, opts ...fs.Option) error {
+	srcPrefix := strings.TrimRight(driver.path(src), "/") + "/"
+	dstPrefix := strings.TrimRight(driver.path(dst), "/") + "/"
+	marker := ""
+	for {
+		lsRes, err := driver.bucket.ListObjects(
+			oss.Marker(marker),
+			oss.Prefix(srcPrefix),
+			oss.WithContext(ctx),
+		)
+		if err != nil {
+			return err
+		}
+		for _, object := range lsRes.Objects {
+			dstKey := dstPrefix + strings.TrimPrefix(object.Key, srcPrefix)
+			_, err = driver.bucket.CopyObject(object.Key, dstKey, oss.WithContext(ctx))
+			if err != nil {
+				return err
+			}
+		}
+		if !lsRes.IsTruncated {
+			break
+		}
+		marker = lsRes.NextMarker
+	}
+	return nil
+}
+
+func (driver *ossFs) MoveDir(ctx context.Context, src, dst string, opts ...fs.Option) error {
+	if err := driver.CopyDir(ctx, src, dst, opts...); err != nil {
+		return err
+	}
+	return driver.RemoveDir(ctx, src, opts...)
+}
+
+func (driver *ossFs) RenameDir(ctx context.Context, oldPath, newPath string, opts ...fs.Option) error {
+	return driver.MoveDir(ctx, oldPath, newPath, opts...)
+}
+
 func (driver *ossFs) Create(ctx context.Context, path string, opts ...fs.Option) (io.WriteCloser, error) {
 	path = driver.path(path)
 	return newOssWriter(ctx, driver.bucket, path, opts...), nil

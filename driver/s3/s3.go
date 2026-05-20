@@ -137,6 +137,45 @@ func (driver *s3Fs) RemoveDir(ctx context.Context, path string, opts ...fs.Optio
 	return nil
 }
 
+func (driver *s3Fs) CopyDir(ctx context.Context, src, dst string, opts ...fs.Option) error {
+	srcPrefix := strings.TrimRight(driver.path(src), "/") + "/"
+	dstPrefix := strings.TrimRight(driver.path(dst), "/") + "/"
+	input := &s3.ListObjectsV2Input{
+		Bucket: aws.String(driver.config.BucketName),
+		Prefix: aws.String(srcPrefix),
+	}
+	paginator := s3.NewListObjectsV2Paginator(driver.client, input)
+	for paginator.HasMorePages() {
+		output, err := paginator.NextPage(ctx)
+		if err != nil {
+			return err
+		}
+		for _, object := range output.Contents {
+			dstKey := dstPrefix + strings.TrimPrefix(*object.Key, srcPrefix)
+			_, err = driver.client.CopyObject(ctx, &s3.CopyObjectInput{
+				Bucket:     aws.String(driver.config.BucketName),
+				Key:        aws.String(dstKey),
+				CopySource: aws.String(fmt.Sprintf("%s/%s", driver.config.BucketName, *object.Key)),
+			})
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (driver *s3Fs) MoveDir(ctx context.Context, src, dst string, opts ...fs.Option) error {
+	if err := driver.CopyDir(ctx, src, dst, opts...); err != nil {
+		return err
+	}
+	return driver.RemoveDir(ctx, src, opts...)
+}
+
+func (driver *s3Fs) RenameDir(ctx context.Context, oldPath, newPath string, opts ...fs.Option) error {
+	return driver.MoveDir(ctx, oldPath, newPath, opts...)
+}
+
 func (driver *s3Fs) Create(ctx context.Context, path string, opts ...fs.Option) (io.WriteCloser, error) {
 	path = driver.path(path)
 	return newS3Writer(ctx, driver.client, driver.config.BucketName, path, opts...), nil

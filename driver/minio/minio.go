@@ -110,6 +110,40 @@ func (driver *minioFs) RemoveDir(ctx context.Context, path string, opts ...fs.Op
 	return nil
 }
 
+func (driver *minioFs) CopyDir(ctx context.Context, src, dst string, opts ...fs.Option) error {
+	srcPrefix := strings.TrimRight(driver.path(src), "/") + "/"
+	dstPrefix := strings.TrimRight(driver.path(dst), "/") + "/"
+	listOpts := minio.ListObjectsOptions{
+		Prefix:    srcPrefix,
+		Recursive: true,
+	}
+	for object := range driver.client.ListObjects(ctx, driver.config.BucketName, listOpts) {
+		if object.Err != nil {
+			return object.Err
+		}
+		dstKey := dstPrefix + strings.TrimPrefix(object.Key, srcPrefix)
+		_, err := driver.client.CopyObject(ctx,
+			minio.CopyDestOptions{Bucket: driver.config.BucketName, Object: dstKey},
+			minio.CopySrcOptions{Bucket: driver.config.BucketName, Object: object.Key},
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (driver *minioFs) MoveDir(ctx context.Context, src, dst string, opts ...fs.Option) error {
+	if err := driver.CopyDir(ctx, src, dst, opts...); err != nil {
+		return err
+	}
+	return driver.RemoveDir(ctx, src, opts...)
+}
+
+func (driver *minioFs) RenameDir(ctx context.Context, oldPath, newPath string, opts ...fs.Option) error {
+	return driver.MoveDir(ctx, oldPath, newPath, opts...)
+}
+
 func (driver *minioFs) Create(ctx context.Context, path string, opts ...fs.Option) (io.WriteCloser, error) {
 	path = driver.path(path)
 	return newMinioWriter(ctx, driver.client, driver.config.BucketName, path, opts...), nil

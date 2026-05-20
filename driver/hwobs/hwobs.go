@@ -122,6 +122,51 @@ func (driver *obsFs) RemoveDir(ctx context.Context, path string, opts ...fs.Opti
 	return nil
 }
 
+func (driver *obsFs) CopyDir(ctx context.Context, src, dst string, opts ...fs.Option) error {
+	srcPrefix := strings.TrimRight(driver.path(src), "/") + "/"
+	dstPrefix := strings.TrimRight(driver.path(dst), "/") + "/"
+	marker := ""
+	for {
+		input := &obs.ListObjectsInput{
+			Bucket: driver.config.BucketName,
+			Marker: marker,
+		}
+		input.Prefix = srcPrefix
+		output, err := driver.client.ListObjects(input)
+		if err != nil {
+			return err
+		}
+		for _, object := range output.Contents {
+			dstKey := dstPrefix + strings.TrimPrefix(object.Key, srcPrefix)
+			copyInput := &obs.CopyObjectInput{}
+			copyInput.Bucket = driver.config.BucketName
+			copyInput.Key = dstKey
+			copyInput.CopySourceBucket = driver.config.BucketName
+			copyInput.CopySourceKey = object.Key
+			_, err = driver.client.CopyObject(copyInput)
+			if err != nil {
+				return err
+			}
+		}
+		if !output.IsTruncated {
+			break
+		}
+		marker = output.NextMarker
+	}
+	return nil
+}
+
+func (driver *obsFs) MoveDir(ctx context.Context, src, dst string, opts ...fs.Option) error {
+	if err := driver.CopyDir(ctx, src, dst, opts...); err != nil {
+		return err
+	}
+	return driver.RemoveDir(ctx, src, opts...)
+}
+
+func (driver *obsFs) RenameDir(ctx context.Context, oldPath, newPath string, opts ...fs.Option) error {
+	return driver.MoveDir(ctx, oldPath, newPath, opts...)
+}
+
 func (driver *obsFs) Create(ctx context.Context, path string, opts ...fs.Option) (io.WriteCloser, error) {
 	path = driver.path(path)
 	return newObsWriter(ctx, driver.client, driver.config.BucketName, path, opts...), nil

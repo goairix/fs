@@ -68,6 +68,24 @@ func Local() {
 		log.Fatal(err)
 	}
 
+	// 复制目录
+	err = fs.CopyDir(ctx, "local", "local_copy")
+	if err != nil {
+		log.Fatal("复制目录错误：" + err.Error())
+	}
+
+	// 移动目录
+	err = fs.MoveDir(ctx, "local_copy", "local_moved")
+	if err != nil {
+		log.Fatal("移动目录错误：" + err.Error())
+	}
+
+	// 重命名目录
+	err = fs.RenameDir(ctx, "local_moved", "local_renamed")
+	if err != nil {
+		log.Fatal("重命名目录错误：" + err.Error())
+	}
+
 	// 列出目录内容
 	files, err := fs.List(ctx, "/")
 	if err != nil {

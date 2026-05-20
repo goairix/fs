@@ -14,6 +14,12 @@ type FileSystem interface {
 	MakeDir(ctx context.Context, path string, perm os.FileMode, opts ...Option) error
 	// RemoveDir 删除目录
 	RemoveDir(ctx context.Context, path string, opts ...Option) error
+	// CopyDir 复制目录
+	CopyDir(ctx context.Context, src, dst string, opts ...Option) error
+	// MoveDir 移动目录
+	MoveDir(ctx context.Context, src, dst string, opts ...Option) error
+	// RenameDir 重命名目录
+	RenameDir(ctx context.Context, oldPath, newPath string, opts ...Option) error
 
 	// Create 创建文件并返回io.WriteCloser
 	Create(ctx context.Context, path string, opts ...Option) (io.WriteCloser, error)

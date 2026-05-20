@@ -61,6 +61,36 @@ func (driver *localFs) RemoveDir(_ context.Context, path string, opts ...fs.Opti
 	return os.RemoveAll(driver.fullPath(path))
 }
 
+func (driver *localFs) CopyDir(ctx context.Context, src, dst string, opts ...fs.Option) error {
+	srcPath := driver.fullPath(src)
+	dstPath := driver.fullPath(dst)
+	return filepath.Walk(srcPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(srcPath, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dstPath, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode())
+		}
+		return driver.Copy(ctx, filepath.Join(src, rel), filepath.Join(dst, rel), opts...)
+	})
+}
+
+func (driver *localFs) MoveDir(ctx context.Context, src, dst string, opts ...fs.Option) error {
+	if err := driver.CopyDir(ctx, src, dst, opts...); err != nil {
+		return err
+	}
+	return os.RemoveAll(driver.fullPath(src))
+}
+
+func (driver *localFs) RenameDir(ctx context.Context, oldPath, newPath string, opts ...fs.Option) error {
+	return driver.MoveDir(ctx, oldPath, newPath, opts...)
+}
+
 func (driver *localFs) Create(ctx context.Context, path string, opts ...fs.Option) (io.WriteCloser, error) {
 	options := &fs.Options{}
 	for _, opt := range opts {

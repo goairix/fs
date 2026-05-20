@@ -124,6 +124,46 @@ func (driver *cosFs) RemoveDir(ctx context.Context, path string, opts ...fs.Opti
 	return nil
 }
 
+func (driver *cosFs) CopyDir(ctx context.Context, src, dst string, opts ...fs.Option) error {
+	srcPrefix := strings.TrimRight(driver.path(src), "/") + "/"
+	dstPrefix := strings.TrimRight(driver.path(dst), "/") + "/"
+	var marker string
+	opt := &cos.BucketGetOptions{
+		Prefix: srcPrefix,
+		Marker: marker,
+	}
+	isTruncated := true
+	for isTruncated {
+		res, _, err := driver.client.Bucket.Get(ctx, opt)
+		if err != nil {
+			return err
+		}
+		for _, object := range res.Contents {
+			dstKey := dstPrefix + strings.TrimPrefix(object.Key, srcPrefix)
+			sourceURL := strings.ReplaceAll(driver.config.BucketURL, "https://", "") + "/" + object.Key
+			_, _, err = driver.client.Object.Copy(ctx, dstKey, sourceURL, nil)
+			if err != nil {
+				return err
+			}
+		}
+		isTruncated = res.IsTruncated
+		marker = res.NextMarker
+		opt.Marker = marker
+	}
+	return nil
+}
+
+func (driver *cosFs) MoveDir(ctx context.Context, src, dst string, opts ...fs.Option) error {
+	if err := driver.CopyDir(ctx, src, dst, opts...); err != nil {
+		return err
+	}
+	return driver.RemoveDir(ctx, src, opts...)
+}
+
+func (driver *cosFs) RenameDir(ctx context.Context, oldPath, newPath string, opts ...fs.Option) error {
+	return driver.MoveDir(ctx, oldPath, newPath, opts...)
+}
+
 func (driver *cosFs) Create(ctx context.Context, path string, opts ...fs.Option) (io.WriteCloser, error) {
 	path = driver.path(path)
 	return newCosWriter(ctx, driver.client, path, opts...), nil
@@ -134,6 +174,9 @@ func (driver *cosFs) Open(ctx context.Context, path string, opts ...fs.Option) (
 	resp, err := driver.client.Object.Get(ctx, path, nil)
 	if err != nil {
 		return nil, err
+	}
+	if resp == nil {
+		return nil, os.ErrNotExist
 	}
 	return resp.Body, nil
 }
@@ -183,6 +226,9 @@ func (driver *cosFs) Stat(ctx context.Context, path string, opts ...fs.Option) (
 	if err != nil {
 		return nil, err
 	}
+	if resp == nil {
+		return nil, os.ErrNotExist
+	}
 
 	return newCosFileInfo(cos.Object{
 		Key:          path,
@@ -195,6 +241,9 @@ func (driver *cosFs) GetMimeType(ctx context.Context, path string, opts ...fs.Op
 	resp, err := driver.client.Object.Head(ctx, driver.path(path), nil)
 	if err != nil {
 		return "", err
+	}
+	if resp == nil {
+		return "", os.ErrNotExist
 	}
 
 	contentType := resp.Header.Get("Content-Type")
@@ -248,6 +297,9 @@ func (driver *cosFs) GetMetadata(ctx context.Context, path string, opts ...fs.Op
 	resp, err := driver.client.Object.Head(ctx, path, nil)
 	if err != nil {
 		return nil, err
+	}
+	if resp == nil {
+		return nil, os.ErrNotExist
 	}
 
 	metadata := make(map[string]interface{})
