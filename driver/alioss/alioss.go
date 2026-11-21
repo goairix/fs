@@ -21,6 +21,9 @@ type Config struct {
 	BucketName      string        // 存储桶名称
 	SubPath         string        // 子目录路径
 	AccessMode      fs.AccessMode // 访问模式
+
+	// Transport 可选，nil 时使用 SDK 默认传输。
+	Transport http.RoundTripper
 }
 
 // ossFs OSS文件系统
@@ -32,7 +35,11 @@ type ossFs struct {
 
 func New(config Config) (fs.FileSystem, error) {
 	// 初始化OSS客户端
-	client, err := oss.New(config.Endpoint, config.AccessKeyID, config.SecretAccessKey)
+	var httpClient *http.Client
+	if config.Transport != nil {
+		httpClient = &http.Client{Transport: config.Transport}
+	}
+	client, err := oss.New(config.Endpoint, config.AccessKeyID, config.SecretAccessKey, oss.HTTPClient(httpClient))
 	if err != nil {
 		return nil, err
 	}

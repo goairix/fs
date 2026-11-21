@@ -96,8 +96,16 @@ func (driver *minioFs) AbortMultipartUpload(ctx context.Context, path string, up
 }
 
 func (driver *minioFs) ListMultipartUploads(ctx context.Context, opts ...fs.Option) ([]fs.MultipartUploadInfo, error) {
+	var options fs.Options
+	for _, opt := range opts {
+		opt(&options)
+	}
+	prefix := options.MultipartPrefix
+	if prefix != "" {
+		prefix = driver.path(prefix)
+	}
 	var uploads []fs.MultipartUploadInfo
-	for multipart := range driver.client.ListIncompleteUploads(ctx, driver.config.BucketName, "", true) {
+	for multipart := range driver.client.ListIncompleteUploads(ctx, driver.config.BucketName, prefix, true) {
 		if multipart.Err != nil {
 			return nil, multipart.Err
 		}

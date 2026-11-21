@@ -75,7 +75,7 @@ type Uploader interface {
 	CompleteMultipartUpload(ctx context.Context, path string, uploadID string, parts []MultipartPart, opts ...Option) error
 	// AbortMultipartUpload 取消分片上传
 	AbortMultipartUpload(ctx context.Context, path string, uploadID string, opts ...Option) error
-	// ListMultipartUploads 列出所有未完成的分片上传
+	// ListMultipartUploads 列出所有未完成的分片上传，可通过 WithMultipartPrefix 限制路径前缀。
 	ListMultipartUploads(ctx context.Context, opts ...Option) ([]MultipartUploadInfo, error)
 	// ListUploadedParts 列出已上传的分片
 	ListUploadedParts(ctx context.Context, path string, uploadID string, opts ...Option) ([]MultipartPart, error)

@@ -23,6 +23,9 @@ type Config struct {
 	SubPath         string        // 子目录路径
 	Location        string        // 区域
 	AccessMode      fs.AccessMode // 访问模式
+
+	// Transport 可选，nil 时使用 MinIO SDK 默认传输。
+	Transport http.RoundTripper
 }
 
 // minioFs MinIO文件系统
@@ -35,8 +38,9 @@ type minioFs struct {
 func New(config Config) (fs.FileSystem, error) {
 	// 初始化MinIO客户端
 	client, err := minio.New(config.Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(config.AccessKeyID, config.SecretAccessKey, ""),
-		Secure: config.UseSSL,
+		Creds:     credentials.NewStaticV4(config.AccessKeyID, config.SecretAccessKey, ""),
+		Secure:    config.UseSSL,
+		Transport: config.Transport,
 	})
 	if err != nil {
 		return nil, err

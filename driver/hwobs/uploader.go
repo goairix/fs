@@ -100,23 +100,39 @@ func (driver *obsFs) AbortMultipartUpload(ctx context.Context, path string, uplo
 }
 
 func (driver *obsFs) ListMultipartUploads(ctx context.Context, opts ...fs.Option) ([]fs.MultipartUploadInfo, error) {
+	var options fs.Options
+	for _, opt := range opts {
+		opt(&options)
+	}
+	prefix := options.MultipartPrefix
+	if prefix != "" {
+		prefix = driver.path(prefix)
+	}
 	input := &obs.ListMultipartUploadsInput{
 		Bucket: driver.config.BucketName,
+		Prefix: prefix,
 	}
-	output, err := driver.client.ListMultipartUploads(input)
-	if err != nil {
-		return nil, err
+	uploads := make([]fs.MultipartUploadInfo, 0)
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		output, err := driver.client.ListMultipartUploads(input)
+		if err != nil {
+			return nil, err
+		}
+		for _, upload := range output.Uploads {
+			uploads = append(uploads, fs.MultipartUploadInfo{
+				UploadID:   upload.UploadId,
+				Path:       upload.Key,
+				CreateTime: upload.Initiated,
+			})
+		}
+		if !output.IsTruncated {
+			return uploads, nil
+		}
+		input.KeyMarker, input.UploadIdMarker = output.NextKeyMarker, output.NextUploadIdMarker
 	}
-
-	uploads := make([]fs.MultipartUploadInfo, 0, len(output.Uploads))
-	for _, upload := range output.Uploads {
-		uploads = append(uploads, fs.MultipartUploadInfo{
-			UploadID:   upload.UploadId,
-			Path:       upload.Key,
-			CreateTime: upload.Initiated,
-		})
-	}
-	return uploads, nil
 }
 
 func (driver *obsFs) ListUploadedParts(ctx context.Context, path string, uploadID string, opts ...fs.Option) ([]fs.MultipartPart, error) {

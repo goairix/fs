@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/goairix/fs"
@@ -165,19 +166,26 @@ func (driver *localFs) AbortMultipartUpload(ctx context.Context, path string, up
 }
 
 func (driver *localFs) ListMultipartUploads(ctx context.Context, opts ...fs.Option) ([]fs.MultipartUploadInfo, error) {
+	var options fs.Options
+	for _, opt := range opts {
+		opt(&options)
+	}
 	uploads, err := driver.multipartStorage.List()
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]fs.MultipartUploadInfo, len(uploads))
-	for i, upload := range uploads {
+	result := make([]fs.MultipartUploadInfo, 0, len(uploads))
+	for _, upload := range uploads {
+		if !strings.HasPrefix(upload.Path, options.MultipartPrefix) {
+			continue
+		}
 		createTime, _ := time.Parse(time.RFC3339, upload.CreateTime)
-		result[i] = fs.MultipartUploadInfo{
+		result = append(result, fs.MultipartUploadInfo{
 			UploadID:   upload.UploadID,
 			Path:       upload.Path,
 			CreateTime: createTime,
-		}
+		})
 	}
 	return result, nil
 }

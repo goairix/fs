@@ -364,6 +364,20 @@ func main() {
 }
 ```
 
+### 分片上传查询前缀与自定义传输
+
+所有驱动均支持按路径前缀查询未完成的分片上传：
+
+```go
+uploads, err := fsCli.Uploader().ListMultipartUploads(ctx, fs.WithMultipartPrefix("reports/"))
+```
+
+非空前缀相对于配置的 `SubPath`。例如 `SubPath: "tenant"` 和前缀 `"reports/"` 在云存储中查询 `tenant/reports/`；Local 按保存的相对路径 `reports/` 过滤。未传选项或前缀为空时保留原查询范围，不会自动限制到 `SubPath`。云驱动自动读取全部分页。
+
+这是前缀匹配，精确查找单个文件时仍需比较返回的 `Path`。云驱动返回的路径包含 `SubPath`，Local 返回上传时传入的相对路径。
+
+MinIO、AliOSS、OBS、S3 和 COS 的 `Config` 均提供可选的 `Transport http.RoundTripper`，可用于自定义代理、TLS 或测试传输；为 `nil` 时使用各 SDK 默认传输。COS 仍由 SDK 包装请求签名。
+
 ### 分片断点续传
 断点续传是在上传过程中，如果网络中断或上传失败，可以从上次中断的位置继续上传。以下是一个示例：
 ```go

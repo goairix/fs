@@ -19,6 +19,15 @@ type Options struct {
 	ContentDisposition string
 	CdnDomain          string
 	SignUrlExpires     time.Duration
+	MultipartPrefix    string
+}
+
+// WithMultipartPrefix 为未完成上传查询设置相对于驱动 SubPath 的路径前缀。
+// 空前缀沿用原查询范围。返回的对象名仍需由调用方按需精确匹配。
+func WithMultipartPrefix(prefix string) Option {
+	return func(o *Options) {
+		o.MultipartPrefix = prefix
+	}
 }
 
 // WithMetadata 设置元数据

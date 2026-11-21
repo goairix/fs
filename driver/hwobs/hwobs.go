@@ -20,6 +20,9 @@ type Config struct {
 	BucketName      string        // 存储桶名称
 	SubPath         string        // 子目录路径
 	AccessMode      fs.AccessMode // 访问模式
+
+	// Transport 可选，nil 时使用 SDK 默认传输。
+	Transport http.RoundTripper
 }
 
 // obsFs OBS文件系统
@@ -30,7 +33,15 @@ type obsFs struct {
 
 func New(config Config) (fs.FileSystem, error) {
 	// 初始化OBS客户端
-	client, err := obs.New(config.AccessKeyID, config.SecretAccessKey, config.Endpoint)
+	var httpClient *http.Client
+	if config.Transport != nil {
+		httpClient = &http.Client{
+			Transport: config.Transport,
+			// 保留 OBS SDK 禁止自动重定向的行为。
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
+		}
+	}
+	client, err := obs.New(config.AccessKeyID, config.SecretAccessKey, config.Endpoint, obs.WithHttpClient(httpClient))
 	if err != nil {
 		return nil, err
 	}

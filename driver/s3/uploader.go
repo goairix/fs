@@ -104,24 +104,38 @@ func (driver *s3Fs) AbortMultipartUpload(ctx context.Context, path string, uploa
 }
 
 func (driver *s3Fs) ListMultipartUploads(ctx context.Context, opts ...fs.Option) ([]fs.MultipartUploadInfo, error) {
+	var options fs.Options
+	for _, opt := range opts {
+		opt(&options)
+	}
+	prefix := options.MultipartPrefix
+	if prefix != "" {
+		prefix = driver.path(prefix)
+	}
 	input := &s3.ListMultipartUploadsInput{
 		Bucket: aws.String(driver.config.BucketName),
 	}
-
-	result, err := driver.client.ListMultipartUploads(ctx, input)
-	if err != nil {
-		return nil, err
+	if prefix != "" {
+		input.Prefix = aws.String(prefix)
 	}
-
-	uploads := make([]fs.MultipartUploadInfo, len(result.Uploads))
-	for i, upload := range result.Uploads {
-		uploads[i] = fs.MultipartUploadInfo{
-			UploadID:   *upload.UploadId,
-			Path:       *upload.Key,
-			CreateTime: *upload.Initiated,
+	uploads := make([]fs.MultipartUploadInfo, 0)
+	for {
+		result, err := driver.client.ListMultipartUploads(ctx, input)
+		if err != nil {
+			return nil, err
 		}
+		for _, upload := range result.Uploads {
+			uploads = append(uploads, fs.MultipartUploadInfo{
+				UploadID:   *upload.UploadId,
+				Path:       *upload.Key,
+				CreateTime: *upload.Initiated,
+			})
+		}
+		if !aws.ToBool(result.IsTruncated) {
+			return uploads, nil
+		}
+		input.KeyMarker, input.UploadIdMarker = result.NextKeyMarker, result.NextUploadIdMarker
 	}
-	return uploads, nil
 }
 
 func (driver *s3Fs) ListUploadedParts(ctx context.Context, path string, uploadID string, opts ...fs.Option) ([]fs.MultipartPart, error) {

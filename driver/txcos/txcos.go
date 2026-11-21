@@ -19,6 +19,9 @@ type Config struct {
 	SecretKey  string        // 密钥Key
 	SubPath    string        // 子目录路径
 	AccessMode fs.AccessMode // 访问模式
+
+	// Transport 可选，nil 时使用 SDK 默认传输。
+	Transport http.RoundTripper
 }
 
 // cosFs 腾讯云COS文件系统
@@ -38,6 +41,7 @@ func New(config Config) (fs.FileSystem, error) {
 		Transport: &cos.AuthorizationTransport{
 			SecretID:  config.SecretID,
 			SecretKey: config.SecretKey,
+			Transport: config.Transport,
 		},
 	})
 

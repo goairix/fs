@@ -27,6 +27,9 @@ type Config struct {
 	SubPath         string        // 子目录路径
 	UsePathStyle    bool          // 是否使用路径样式访问
 	AccessMode      fs.AccessMode // 访问模式
+
+	// Transport 可选，nil 时使用 SDK 默认传输。
+	Transport http.RoundTripper
 }
 
 // s3Fs S3文件系统
@@ -57,6 +60,21 @@ func New(conf Config) (fs.FileSystem, error) {
 		cfg,
 		func(o *s3.Options) {
 			o.UsePathStyle = conf.UsePathStyle
+			if conf.Transport != nil {
+				o.HTTPClient = &http.Client{
+					Transport: conf.Transport,
+					// 与 AWS SDK 一致，仅允许保留请求方法的重定向。
+					CheckRedirect: func(req *http.Request, via []*http.Request) error {
+						if req.Response.StatusCode != http.StatusTemporaryRedirect && req.Response.StatusCode != http.StatusPermanentRedirect {
+							return http.ErrUseLastResponse
+						}
+						if len(via) > 0 && via[len(via)-1].URL.Host != req.URL.Host {
+							req.Header.Del("X-Amz-Security-Token")
+						}
+						return nil
+					},
+				}
+			}
 		},
 	)
 
